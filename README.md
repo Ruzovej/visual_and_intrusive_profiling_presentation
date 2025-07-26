@@ -2,9 +2,9 @@
 
 This repository contains a LaTeX Beamer presentation about intrusive and visual profiling techniques, with a focus on their application in constrained environments.
 
-## License
+## [License](LICENSE)
 
-© Lukáš Růžička, 2025. This work is openly licensed via [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+© 2025 Lukáš Růžička. This work is openly licensed via [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## "Compiling" the presentation
 
