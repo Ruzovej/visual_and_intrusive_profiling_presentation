@@ -1,2 +1,25 @@
-# visual_and_intrusive_profiling_presentation
-Presentation `Introduction to intrusive &amp; visual profiling, focusing on constrained environments` for Prague C++ meetup on 2025 07 29
+# Prague C++ meetup on 2025 07 29 - `Introduction to intrusive & visual profiling, focusing on constrained environments`
+
+This repository contains a LaTeX Beamer presentation about intrusive and visual profiling techniques, with a focus on their application in constrained environments.
+
+## License
+
+© Lukáš Růžička, 2025. This work is openly licensed via [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## "Compiling" the presentation
+
+First, build needed `docker` image:
+
+```bash
+$ scripts/docker_build.bash
+...
+```
+
+If succesful, presentation can be "compiled" via:
+
+```bash
+$ scripts/make.bash
+...
+```
+
+result, if successful, is [build/presentation.pdf](build/presentation.pdf).
