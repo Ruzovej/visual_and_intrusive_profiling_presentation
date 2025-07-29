@@ -112,48 +112,44 @@
 \section{Personal introduction}
 
 \begin{frame}
-    Ahoj, ja jsem Lukas.
+    Hi, I'm Lukas.
 
-    Prosim, otazky klidne pokladejte hned, ci si je nechte na konec (idealne si zapamatujte kontext pomoci cisla stranky, dole v rohu).
+    Please feel free to ask questions immediately, or save them for the end (ideally remember the context using the page number in the corner).
 
-    Libi se mi "koncept" techto meetupu, a rikal jsem si, ze bych rad prispel, ne jen "konzumoval" prednasky ostatnich. Ale cim (viz nize), a jak (viz domluva na discord serveru, proklik z https://www.meetup.com/prague-cpp/)?
+    I like the concept of these meetups and wanted to contribute beside just consuming others' presentations. But what to share and how?
 
-    Jeden ze svych prvnich ukolu (je to cca 7 let zpatky, detaily si nepamatuju) ve sve programatorske kariere jsem pomoci nej vyresil za pomoci knihovny `nvtx' a nejakeho addonu do `Visual studio', ktery ta data "prijimal" a zobrazoval.
+    About 7 years ago, I solved one of my first programming tasks using the `nvtx` library and a Visual Studio addon that received and displayed the profiling data.
 
-    Slo o to, ze jedno vlakno pushovalo do fronty, a druhe z ni popovalo. Kdyz byla fronta prazdna, tak tam byl "timed wait", asi pomoci `std::condition\_variable' ci obdobneho. Ten byl volan nejak neoptimalne (ci rovnou uplne spatne), a nikdy nedoslo k jeho ukonceni jinak nez timeoutem, coz jsem tenkrat krasne vypozoroval z vysledku daneho profilovani.
+    The issue was: one thread was pushing to a queue while another was popping from it. When the queue was empty, there was a "timed wait" (probably using `std::condition\_variable` or similar). This was called inefficiently - it never terminated except by timeout, which I observed through visualising the profiling results.
 
-    Profilovani mi prijde zajimave a zabavne.
+    Personally I find profiling enjoyable, and I hope you will enjoy this talk.
 
 \end{frame}
 
 
 
-\section{Content of the talk}
+\section{Structure of the talk}
 
 \begin{frame}
-    Jak to pojmout? Mel jsem predstavu, ktera se setkala s pozitivnim ohlasem (TODO zminit to konkretni vlakno s tim "poll"em):
+    My planned approach\footnote{confirmed in this discord thread with this poll https://discord.com/channels/1077146284143673354/1387733811818922014/1387736431883063346}:
 
     \begin{itemize}
-        \item nejdrive popsat svou zkusenost s "externimi" knihovnami/frameworky/nastroji:
+        \item First, I'll describe my experience with "external" libraries/frameworks/tools:
         \begin{itemize}
-            \item `nvtx' TODO link zde nebo pozdeji?!
-            \item `Tracy' TODO ditto
-            \item `perf' + `flamegraphs' ...
+            \item nvtx
+            \item Tracy
+            \item perf + flamegraphs
+            \item Mention some others I've heard off but never used (Intel VTune Profiler, Clang XRay, ...)
         \end{itemize}
-        \item zminit nejake dalsi (o kterych jsem "slysel", ale nikdy je nepouzival):
-        \begin{itemize}
-            \item `Intel VTune Profiler' ...
-            \item `Clang XRay' https://llvm.org/docs/XRay.html ...
-        \end{itemize}
-        \item pak zminit v cem mi nevyhovovaly a co jsem potreboval jinak.
-        \item Z toho vyplynulo, ze jsem zacal psat "vlastni" knihovnu pro tento ucel (`cxxet', viz https://github.com/Ruzovej/cxxet).
+        \item Then explain what didn't work for me and what I needed differently
+        \item This led me to start writing my own library for this purpose (second half of the presentation: cxxet)
     \end{itemize}
 
 \end{frame}
 
 
 
-\section{Vysvetleni pojmu}
+\section{How to understand mentioned terms}
 
 \begin{frame}{Application profiling}
     To profile an application means to somehow measure its performance, resource usage, etc. in order to identify bottlenecks, potential optimization opportunities, and so on.
@@ -165,9 +161,8 @@
     \end{itemize}
 
 \end{frame}
-
 \begin{frame}{Non-intrusive profiling}
-    Measuring which doesn't require any source code (of target application) modification. This is usually done by attaching some tool to the running application, which then collects data about its performance, resource usage, and so on.
+    Measuring performance without requiring any source code modification of the target application. This is usually done by attaching a tool to a running application, which then collects data about its performance, resource usage, and so on.
 
     Examples:
 
@@ -180,27 +175,29 @@
 \end{frame}
 
 \begin{frame}{Intrusive profiling}
-    Je specificke modifikaci zdrojoveho kodu programu - zpravidla postupne pridavani markeru/logovani/apd. na zaklade vysledku z predchozi iterace.
+    Measuring performance by modifying the application's source code - typically by incrementally adding markers/logging/etc. based on results from previous iterations.
 
-    Je velmi podobne takzvanemu "printf debugging", ktere zaroven muze byt pouzito jako nejjednodussi profilovani tohoto druhu - vypis zmerenych casu na standartni vystup, do logu, a podobne.
+    This is very similar to "printf debugging", which can also serve as the simplest form of this type of profiling - printing measured times to standard output, logs, and similar.
 
 \end{frame}
 
 \begin{frame}{Visual profiling}
-    Zobrazeni vysledku pomoci nejakeho UI, napriklad `chrome://tracing' (TODO obrazek) ci perfetto.ui (TODO link a obrazek).
+    Displaying results using some UI, for example `chrome://tracing` or `perfetto.ui`.
 
-    Opakem muze byt "zakladni" (napr. textove) zobrazeni vysledku jako napriklad `perf report' (TODO obrazek ci ukazka?!), nebo pouhe logovani casu stravenych v nejake casti kodu.
+    The opposite might be "basic" (e.g. textual) display of collected data such as `perf report`, or simple logging of time spent in some part of the code.
 
 \end{frame}
 
 \begin{frame}{Constrained environments}
-    Omlouvam se za trochu zavadejici nazev - konkretne za to slovo "constrained" - obecne je v oboru softwaroveho vyvoje chapano ve spojitosti s embedded, ale to nebyl muj pripad - moje prostredi byl sice "velky" server, ale omezeni byla jina - absence `root' pristupu (pro perf) a vnitrni architektura aplikace.
+    I apologize for the somewhat misleading name - specifically for the word "constrained" - generally in software development it is understood in connection with embedded systems, but that wasn't my case - my environment was indeed a "large" server, but the limitations (... constraints ...) were different - absence of `root' access (for perf) and internal architecture of the application.
+
+    I would be happy if someone experienced in the `embedded' field would tell me what the typical limitations in this field are.
 
 \end{frame}
 
 
 
-\section{Zavedene nastroje, knihovny a frameworky}
+\section{Established tools and frameworks}
 
 
 \subsection{Nvtx}
@@ -262,25 +259,25 @@ int main(int, char **) {
 \end{frame}
 
 \begin{frame}{NVIDIA Nsight Systems + nvtx}
-    Odkazy (TODO mozna je dat na konec tohoto slide):
+    Advantages:
+
+    \begin{itemize}
+        \item extensive framework, capable of much more than what I'm describing here
+        \item ability to observe behavior in real time (when launched through the GUI - another "driver")
+    \end{itemize}
+
+    Disadvantages:
+
+    \begin{itemize}
+        \item the profiler (`nsys' in the example above) is a standalone application, which if not suitable/available, requires using another "driver" or providing your own one (see https://github.com/NVIDIA/NVTX/tree/release-v3/tools/sample-injection)
+    \end{itemize}
+
+    Further references:
 
     \begin{itemize}
          \item https://developer.nvidia.com/nsight-systems
          \item https://docs.nvidia.com/nsight-systems/UserGuide/index.html\#nvtx-trace
          \item https://github.com/NVIDIA/NVTX
-    \end{itemize}
-
-    Vyhody:
-
-    \begin{itemize}
-        \item velmi rozsahly framework, umi to daleko vic veci nez co tu popisuji
-        \item moznost sledovat chovani v realnem case (pri spusteni prez gui)
-    \end{itemize}
-
-    Nevyhody:
-
-    \begin{itemize}
-        \item profiler (`nsys' v prikladu vyse) je samostatna aplikace, ktera pokud neni vyhovujici/dostupna, je nutnost "dodat" svoji implementaci (viz. https://github.com/NVIDIA/NVTX/tree/release-v3/tools/sample-injection)
     \end{itemize}
 
 \end{frame}
@@ -346,27 +343,27 @@ int main(int, char **) { some_function(); }
 \end{frame}
 
 \begin{frame}{Tracy}
-    Odkazy (TODO mozna je dat na konec tohoto slide):
+    Advantages:
+
+    \begin{itemize}
+        \item again, extensive framework, capable of far more than what I'm describing here
+        \item no "profiling" application needed - on the profiled program side, it's sufficient to link the appropriate library (`libTracyClient.a'/`TracyClient' in the example above)
+        \item ability to observe behavior in real time (in the gui)
+    \end{itemize}
+
+    Disadvantages:
+
+    \begin{itemize}
+        \item inability to export data to other formats
+        \item focused on desktop/gui applications
+        \item `TracyClient' library is robust but not very modifiable
+    \end{itemize}
+
+    Further references:
 
     \begin{itemize}
         \item https://github.com/wolfpld/tracy
         \item https://github.com/wolfpld/tracy/releases/latest/download/tracy.pdf
-    \end{itemize}
-
-    Vyhody:
-
-    \begin{itemize}
-        \item velmi rozsahly framework, umi to daleko vic veci nez co tu popisuji
-        \item zadna "profilovaci" aplikace - na strane profilovaneho programu staci prilinkovat prislusnou knihovnu (`libTracyClient.a'/`TracyClient' v prikladu vyse)
-        \item moznost sledovat chovani v realnem case (v gui)
-    \end{itemize}
-
-    Nevyhody:
-
-    \begin{itemize}
-        \item nemoznost exportovat data do jineho formatu
-        \item zamerene na desktopove/gui aplikace
-        \item knihovna `TracyClient' je sice robustni, ale pomerne slozita (TODO detaily bud dalsi slide, ci section, napr. v uvodu do `cxxet')
     \end{itemize}
 
 \end{frame}
@@ -375,7 +372,7 @@ int main(int, char **) { some_function(); }
 \subsection{Perf + FlameGraph}
 
 \begin{frame}{Perf + FlameGraph}
-    Just a quick mention: `perf' (https://perfwiki.github.io/main) is advanced sampling profiler for linux, and `Flame Graph' tools can be used to visualize collected result (e.g. https://github.com/brendangregg/FlameGraph?tab=readme-ov-file\#linux-perf\_events-1).
+    Just a quick mention: `perf'\footnote{https://perfwiki.github.io/main} is advanced sampling profiler for linux, and `Flame Graph' tools can be used to visualize collected results\footnote{https://github.com/brendangregg/FlameGraph?tab=readme-ov-file\#linux-perf\_events-1}.
 
 \end{frame}
 
@@ -383,11 +380,11 @@ int main(int, char **) { some_function(); }
 \subsection{Furher tools ...}
 
 \begin{frame}
-    There are more tools, which I don't have any experience with, and therefore I won't talk about them. Using some search engine would probably yield few more results, and among the top ones would be e.g.:
+    There are more tools, which I don't have any experience with, and therefore I won't talk about them. Using some search engine would probably yield few more results, and among the top ones would be probably e.g.:
 
     \begin{itemize}
-        \item `Intel VTune Profiler' - https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html
-        \item `Clang XRay' - https://llvm.org/docs/XRay.html
+        \item Intel VTune Profiler\footnote{https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html}
+        \item Clang XRay\footnote{https://llvm.org/docs/XRay.html}
         \item ...
     \end{itemize}
 
@@ -398,56 +395,56 @@ int main(int, char **) { some_function(); }
 \section{My (previous) situation}
 
 \begin{frame}{My (previous) environment}
-    Timto se vracim k tomu zavadejicimu "constrained environments" z uvodu: v predchozi firme, kde jsem pracoval, jsem potreboval/chtel zprofilovat web-serverovou aplikaci zhruba teto architektury:
+    Returning to the misleading "constrained environments" from the introduction: in my previous company, I needed/wanted to profile a web server application with roughly this architecture:
 
     \begin{enumerate}
-        \item po spusteni se zavola `fork()' a parent se ukoncil, dite pokracovalo zavolanim `setssid()' (tzv. deamonizace procesu, ekvivalentni http://man7.org/linux/man-pages/man3/daemon.3.html)
-        \item inicializace aplikace (cteni konfiguracnich souboru, apd.)
-        \item otevreni socketu pro prijem requestu
-        \item smycka ve ktere se prijimal prichozi request, ktery se predal ke zpracovani do forknuteho child procesu (ktery po odeslani odpovedi skoncil)
+        \item after startup, `fork()' was called and the parent terminated, the child continued by calling `setsid()'\footnote{process daemonization, equivalent to http://man7.org/linux/man-pages/man3/daemon.3.html}
+        \item application initialization (reading configuration files, etc.)
+        \item opening socket for receiving requests
+        \item loop for accepting incoming requests, which were passed for processing to a `fork'ed child process (which terminated after sending the response)
     \end{enumerate}
 
-    Prostredi bylo zpocatku velmi neflexibilni - stary `Debian' na "vlastnim" stroji:
+    The environment was initially very inflexible - old `Debian' on a "shared" machine:
     
     \begin{itemize}
-        \item sdilene prostredi pro vyvoj vsemi vyvojari
-        \item absence moznosti instalace nebo rovnou pouzivani nastroju (napr. `perf')
+        \item shared development environment for all developers
+        \item no possibility to install or directly use tools (such as `perf')
     \end{itemize}
 
 \end{frame}
 
 \begin{frame}{Working around that}
-    Using `perf' or `nvtx' wasn't feasible, and `Tracy' out of the box was unusable too - those `forks' (see previous slide) caused both processes to send its data via the `TracyClient' connection to the "collector" and it simply crashed.
+    Using `perf' or `nvtx' wasn't feasible, and `Tracy' out of the box was unusable too - those `forks' (see previous slide) caused both processes to send their data via the `TracyClient' connection to the "collector" and it simply crashed.
 
-    I managed to "bend" `TracyClient' by using few compilation switches - namely `TRACY\_DELAYED\_INIT' and `TRACY\_MANUAL\_LIFETIME' \footnote{see section 2.1.8 in its documentation https://github.com/wolfpld/tracy/releases/latest/download/tracy.pdf} - `TracyClient' was initialized then only in the "second" `fork()'ed child (4th point in the previous slide), where it juggled with `TRACY\_PORT' value - it had to use different port numbers for each `fork`ed child.
+    I managed to "bend" `TracyClient' by using a few compilation switches - namely `TRACY\_DELAYED\_INIT' and `TRACY\_MANUAL\_LIFETIME' \footnote{see section 2.1.8 in its documentation https://github.com/wolfpld/tracy/releases/latest/download/tracy.pdf} - `TracyClient' was then initialized only in the "second" `fork()'ed child (4th point in the previous slide), where it juggled with the `TRACY\_PORT' value - it had to use different port numbers for each `fork'ed child.
 
-    Although, it had at least one practical drawback: no code used both before and after this delayed initialization could contain any markers, etc. because in the "first" phase they would cause a crash (probably due to touching uninitialized data). Examples of such features included logging functions, DB accessing functions, etc.
+    However, it had at least one practical drawback: no code used both before and after this delayed initialization could contain any markers, etc. because in the "first" phase they would cause a crash (most probably due to accessing uninitialized data in `TracyClient' implementation). Examples of such features included logging functions, DB accessing functions, etc.
 
 \end{frame}
 
 \begin{frame}{My (previous) environment v2.0}
-    Eventually, the application got "containerized" and the `daemonization' (point 1 in prev. slide) became unnecessary, but the second `fork' (per each incoming request; point 4 over there) was left unchanged.
+    Eventually, the application got "containerized" and the `daemonization' (point 1 in the prev. slide) became unnecessary, but the second `fork()' (per each incoming request; point 4 over there) was left unchanged.
 
-    IMHO, more healthier solutions would be either:
+    IMHO, "healthier" solutions would be either:
 
     \begin{itemize}
         \item not to `fork()', but simply introduce a thread pool,
-        \item factor out the loop with new connection/request accepting to separate application, which would still `fork', but would call `execv("my\_web\_server", ...)' for each separate request, effectively making the `my\_web\_server' utility-like.
+        \item factor out the loop with new connection/request accepting to a separate application, which would still `fork()', but would call `execv("my\_web\_server", ...)' for each separate request, effectively making the `my\_web\_server' utility-like.
     \end{itemize}
 
-    Unfortunately doing either of those wasn't feasible at the time, so `TracyClient' setup was left unchanged because of that.
+    Unfortunately, doing either of those wasn't feasible at the time, so the `TracyClient' setup was left unchanged because of that.
 
 \end{frame}
 
 \begin{frame}{Minimalalistic tracing library}
-    In the end, the "adjusted" `TracyClient' fulfilled my needs, but the overall experience was bad. Hence the idea for writing my own library for that purpose arose - which eventually led me to start writing the `cxxet' library https://github.com/Ruzovej/cxxet (abbreviation of "C++ easy tracing").
+    In the end, the "adjusted" `TracyClient' partially and sufficiently fulfilled my needs, but the overall experience was bad. Hence the idea for writing my own library for that purpose arose - which eventually led me to start writing the `cxxet' library https://github.com/Ruzovej/cxxet (abbreviation of "C++ easy tracing").
     
-    Maybe it's little ironical that before doing so, I stopped working there.
+    Maybe it's little ironical that before doing so, I stopped working at this company.
 
 \end{frame}
 
 
-
+% TODO continue checking this here ...
 \section{C++ easy tracing}
 
 \begin{frame}{cxxet}{Requirements}
