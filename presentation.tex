@@ -27,6 +27,58 @@
     backgroundcolor=\color{gray!10}
 }
 
+% JSON highlighting
+\lstdefinelanguage{json}{
+    basicstyle=\ttfamily\small,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    breaklines=true,
+    showstringspaces=false,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+    string=[s]{"}{"},
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    literate=
+        *{0}{{{\color{blue}0}}}{1}
+        {1}{{{\color{blue}1}}}{1}
+        {2}{{{\color{blue}2}}}{1}
+        {3}{{{\color{blue}3}}}{1}
+        {4}{{{\color{blue}4}}}{1}
+        {5}{{{\color{blue}5}}}{1}
+        {6}{{{\color{blue}6}}}{1}
+        {7}{{{\color{blue}7}}}{1}
+        {8}{{{\color{blue}8}}}{1}
+        {9}{{{\color{blue}9}}}{1}
+        {:}{{{\color{black}{:}}}}{1}
+        {,}{{{\color{black}{,}}}}{1}
+        {\{}{{{\color{black}{\{}}}}{1}
+        {\}}{{{\color{black}{\}}}}}{1}
+        {[}{{{\color{black}{[}}}}{1}
+        {]}{{{\color{black}{]}}}}{1},
+}
+
+% CMake highlighting
+\lstdefinelanguage{cmake}{
+    basicstyle=\ttfamily\small,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    breaklines=true,
+    showstringspaces=false,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+    keywords={cmake_minimum_required, project, find_package, add_executable, target_link_libraries, set, if, endif, foreach, endforeach, function, endfunction, macro, endmacro, include, add_subdirectory, target_include_directories, target_compile_definitions, option, configure_file, install, FetchContent_Declare, FetchContent_MakeAvailable, FetchContent_GetProperties},
+    keywordstyle=\color{blue}\bfseries,
+    comment=[l]{\#},
+    string=[b]",
+    morestring=[b]',
+    sensitive=false,
+}
+
 % Title page information
 \title{Introduction to Intrusive \& Visual Profiling}
 \subtitle{Focusing on Constrained Environments}
@@ -341,6 +393,323 @@ int main(int, char **) { some_function(); }
 
 \end{frame}
 
+
+
+\section{My (previous) situation}
+
+\begin{frame}{My (previous) environment}
+    Timto se vracim k tomu zavadejicimu "constrained environments" z uvodu: v predchozi firme, kde jsem pracoval, jsem potreboval/chtel zprofilovat web-serverovou aplikaci zhruba teto architektury:
+
+    \begin{enumerate}
+        \item po spusteni se zavola `fork()' a parent se ukoncil, dite pokracovalo zavolanim `setssid()' (tzv. deamonizace procesu, ekvivalentni http://man7.org/linux/man-pages/man3/daemon.3.html)
+        \item inicializace aplikace (cteni konfiguracnich souboru, apd.)
+        \item otevreni socketu pro prijem requestu
+        \item smycka ve ktere se prijimal prichozi request, ktery se predal ke zpracovani do forknuteho child procesu (ktery po odeslani odpovedi skoncil)
+    \end{enumerate}
+
+    Prostredi bylo zpocatku velmi neflexibilni - stary `Debian' na "vlastnim" stroji:
+    
+    \begin{itemize}
+        \item sdilene prostredi pro vyvoj vsemi vyvojari
+        \item absence moznosti instalace nebo rovnou pouzivani nastroju (napr. `perf')
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{Working around that}
+    Using `perf' or `nvtx' wasn't feasible, and `Tracy' out of the box was unusable too - those `forks' (see previous slide) caused both processes to send its data via the `TracyClient' connection to the "collector" and it simply crashed.
+
+    I managed to "bend" `TracyClient' by using few compilation switches - namely `TRACY\_DELAYED\_INIT' and `TRACY\_MANUAL\_LIFETIME' \footnote{see section 2.1.8 in its documentation https://github.com/wolfpld/tracy/releases/latest/download/tracy.pdf} - `TracyClient' was initialized then only in the "second" `fork()'ed child (4th point in the previous slide), where it juggled with `TRACY\_PORT' value - it had to use different port numbers for each `fork`ed child.
+
+    Although, it had at least one practical drawback: no code used both before and after this delayed initialization could contain any markers, etc. because in the "first" phase they would cause a crash (probably due to touching uninitialized data). Examples of such features included logging functions, DB accessing functions, etc.
+
+\end{frame}
+
+\begin{frame}{My (previous) environment v2.0}
+    Eventually, the application got "containerized" and the `daemonization' (point 1 in prev. slide) became unnecessary, but the second `fork' (per each incoming request; point 4 over there) was left unchanged.
+
+    IMHO, more healthier solutions would be either:
+
+    \begin{itemize}
+        \item not to `fork()', but simply introduce a thread pool,
+        \item factor out the loop with new connection/request accepting to separate application, which would still `fork', but would call `execv("my\_web\_server", ...)' for each separate request, effectively making the `my\_web\_server' utility-like.
+    \end{itemize}
+
+    Unfortunately doing either of those wasn't feasible at the time, so `TracyClient' setup was left unchanged because of that.
+
+\end{frame}
+
+\begin{frame}{Minimalalistic tracing library}
+    In the end, the "adjusted" `TracyClient' fulfilled my needs, but the overall experience was bad. Hence the idea for writing my own library for that purpose arose - which eventually led me to start writing the `cxxet' library https://github.com/Ruzovej/cxxet (abbreviation of "C++ easy tracing").
+    
+    Maybe it's little ironical that before doing so, I stopped working there.
+
+\end{frame}
+
+
+
+\section{C++ easy tracing}
+
+\begin{frame}{cxxet}{Requirements}
+    The goal of this library is to:
+    
+    \begin{itemize}
+        \item \label{easy_usage} provide an easy way how to intrusively mark up source code to generate profiling data,
+        \item \label{writing_out_data} hand over the collected data as simply as possible,
+        \item \label{fork_handling} be able to handle `fork()'s (and similar stuff) without any tweaking\footnote{as opposed to `Tracy'},
+        \item \label{no_external_wrapper} not require any external application wrapper\footnote{as opposed to `nvtx'}.
+    \end{itemize}
+
+    Compared to the other frameworks (e.g. `NVIDIA Nsight Systems', `Tracy'), it doesn't have any "visualizing" capabilities, and this added one last requirement:
+
+    \begin{itemize}
+        \item \label{data_format} output the collected data using some "standard" format.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{cxxet}{Missing features}
+    Compared to the competition, it lacks at least:
+
+    \begin{itemize}
+        \item ability to observe the generated traces in real time (not planning to implement this),
+        \item maturity (it's still new, and I didn't have as much time as I wanted to work on it),
+        \item few critical features needed for smooth adoption by anyone else:
+        \begin{itemize}
+            \item documentation,
+            \item ability to run on other platforms other than x86-64 Linux\footnote{maybe it would work on aarch Linux too, but right now definitely not on Windows}.
+        \end{itemize}
+    \end{itemize}
+
+    In other words, "help wanted"! I would be glad for any feedback\footnote{partially fulfilled by this talk?}, not even dreaming about code contribution from others.
+
+\end{frame}
+
+
+\subsection{Features}
+
+\begin{frame}{cxxet features}{Ease of usage?}
+    Regarding the \hyperlink{easy_usage}{ease of usage requirement}, there are at least two factors:
+
+    \begin{itemize}
+        \item obtaining the library,
+        \item marking up the source code.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Obtaining the library}
+    Currently, the easist way is to use `cmake' and its `FetchContent' module:
+
+    \begin{lstlisting}[language=cmake]
+...
+FetchContent_Declare(
+    cxxet
+    GIT_REPOSITORY  git@github.com:Ruzovej/cxxet.git
+    GIT_TAG         some_value # branch/tag name, e.g. `main'
+)
+FetchContent_MakeAvailable(cxxet)
+
+add_executable(your_target ...)
+target_link_libraries(your_target PRIVATE cxxet::trace)
+...
+    \end{lstlisting}
+
+    For more inspiration, see two related examples within the library repository: https://github.com/Ruzovej/cxxet/tree/main/examples/cmake\_fetch\_content
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Marking up the source code}
+    All the basic functionality is in the file `cxxet/all.hxx'\footnote{https://github.com/Ruzovej/cxxet/blob/main/include/all/cxxet/all.hxx}.
+
+    In general, the source code repository contains many examples\footnote{https://github.com/Ruzovej/cxxet/tree/main/examples}. Those demonstrate how to use all provided features, including (not yet introduced, but \hyperlink{fork_handling}{above mentioned}) "sink diversion"\footnote{https://github.com/Ruzovej/cxxet/tree/main/examples/usage/sink\_diversion}.
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Marking up the source code - comparison}
+    When compared to e.g. `nvtx', helper classes and macros which provide the desired markup functionality are very similar, e.g.:
+
+    \begin{lstlisting}[language=C++]
+#include <cxxet/all.hxx> // formerly `#include <nvtx3/nvtx3.hpp>'
+void some_function() {
+  CXXET_mark_complete(__FUNCTION__); // formerly `NVTX3_FUNC_RANGE();'
+  for (int i = 0; i < 6; ++i) {
+    CXXET_mark_complete("loop iteration range"); // formerly `nvtx3::scoped_range loop{"loop iteration range"};'
+...
+    \end{lstlisting}
+
+    And similar applies for `Tracy'.
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Marking up the source code - best practice(s)}
+    It's recommended to pay the cost for `thread\_local' buffer allocation before submiting any marker:
+
+    \begin{lstlisting}[language=C++]
+#include <cxxet/all.hxx>
+int main(int argc, char const **argv) {
+  CXXET_sink_thread_reserve(); // <--
+  // ...
+  std::thread t{[]() {
+    CXXET_sink_thread_reserve(); // <--
+    // ...
+    CXXET_sink_thread_flush(); // not necessary - happens implicitly in the internal `thread_local' object destructor
+  }};
+  // ...
+  t.join();
+}
+    \end{lstlisting}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{One visual example - code}
+    Simplified snippet from `examples/usage/complete/1.cxx'\footnote{https://github.com/Ruzovej/cxxet/blob/main/examples/usage/complete/1.cxx} follows:
+
+    \begin{lstlisting}[language=C++]
+#include "cxxet/all.hxx"
+
+static void pyramid(int const level) {
+  CXXET_mark_complete(__FUNCTION__);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  if (level > 0) {
+    pyramid(level - 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+    \end{lstlisting}
+
+    Calling e.g. `pyramid(3);` will produce data ...
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{One visual example - gui}
+    ... that will look like this in the `perfetto.ui' web service:
+
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{pics/cxxet/pyramid.png}
+        \caption{Visualizing the `pyramid' example in perfetto.ui}
+    \end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}{cxxet features}{Resulting data format}
+    Honoring \hyperlink{data_format}{requirement for data format}, small (mandatory) subset of google's `Trace Event Format'\footnote{https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit?tab=t.0} -> `JSON Object Format'\footnote{https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit?tab=t.0\#heading=h.q8di1j2nawlp} was chosen.
+
+    Advantages:
+
+    \begin{itemize}
+        \item portability,
+        \item `json':
+        \begin{itemize}
+            \item human readable (and most probably understandable too),
+            \item easily processable by tools such as `jq', or custom written scripts.
+        \end{itemize}
+    \end{itemize}
+
+    Disadvantages (compared to binary formats):
+
+    \begin{itemize}
+        \item not as compact,
+        \item not as fast to write out.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Resulting data format example}
+    \begin{lstlisting}[language=json]
+{
+    "displayTimeUnit": "ns",
+    "traceEvents": [
+        {"name": "main", "ph": "X", "ts": 10.199, "dur": 9935.55, "pid": 220013, "tid": 220013},
+        ...
+    ]
+}
+    \end{lstlisting}
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Trace event format adoption}
+    Currently, only fraction of the potential format features are implemented/used\footnote{https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit?tab=t.0\#heading=h.puwqg050lyuy}:
+
+    \begin{itemize}
+        \item `CXXET\_mark\_duration(...)' generates pair of `duration events',
+        \begin{itemize}
+            \item `CXXET\_mark\_duration\_begin(...)' generates only start duration event,
+            \item `CXXET\_mark\_duration\_end(...)' generates only end duration event,
+        \end{itemize}
+        \item `CXXET\_mark\_complete(...)' generates `complete event',
+        \item `CXXET\_mark\_instant(...)' generates `instant event' and fianlly
+        \item `CXXET\_mark\_counter(...)' generates `counter event'.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Resulting data visualization}
+    For the resulting data visualization, "external" tool must be used, of which there are many, for example:
+
+    \begin{itemize}
+        \item chrome://tracing - built inside `google chrome' browser,
+        \item https://ui.perfetto.dev/ - free web service
+        \item Tracy - partial support, must be converted to its native format first,
+        \item ...
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Collected data transfer}
+    \hyperlink{writing_out_data}{Collected markers} are transfered accross those different boundaries:
+
+    \begin{enumerate}
+        \item within the application:
+        \begin{enumerate}
+            \item each marker put directly to `thread\_local' storage buffer,
+            \item those buffers are handed over to the "global" one,
+        \end{enumerate}
+        \item writng the data out (e.g. to a file).
+    \end{enumerate}
+
+    All those actions and thread safe - point 1.1 is such by design, and points 1.2, 2 are protected by locking same instance of `std::mutex'.
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Writing the data to file programatically}
+    Target filename can be specified programatically:
+
+    \begin{lstlisting}[language=C++]
+#include <cxxet/all.hxx>
+
+int main(int argc, char const **argv) {
+    char const *const filename{argc > 1 ? argv[1] : nullptr};
+    CXXET_sink_global_flush(cxxet::output::format::chrome_trace, filename, true); // `true' means to defer the flush - in the destructor of the "global" buffer
+    // ...
+}
+    \end{lstlisting}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Writing the data to file using env. variable}
+    Or environment variable `CXXET\_TARGET\_FILENAME' can be set to the desired filename, but `CXXET\_sink\_global\_flush(...)' must then be avoided:
+
+    \begin{lstlisting}[language=bash]
+$ CXXET_TARGET_FILENAME=/tmp/my_trace.json ./my_app_using_cxxet
+...
+    \end{lstlisting}
+
+    \begin{lstlisting}[language=C++]
+#include <cxxet/all.hxx>
+
+int main(int argc, char const **argv) {
+    // ... same as above ...
+}
+    \end{lstlisting}
+
+    This has equivalent behavior as the previous example.
+\end{frame}
+
+% -=-=-=-=-=-=-=-=-=-=-=- TODO remove this comment ...
 
 
 \section{End of the talk}
