@@ -709,7 +709,79 @@ int main(int argc, char const **argv) {
     This has equivalent behavior as the previous example.
 \end{frame}
 
-% -=-=-=-=-=-=-=-=-=-=-=- TODO remove this comment ...
+\begin{frame}{cxxet features}{No external wrapper}
+    It should be obvious from the previous slide(s) that no external wrapper/application is needed to obtain the profiling data. The `cxxet' library provides an self-contained solution to the collection of profiling data, such as `TracyClient' does, and saves it in a similar way to a file on a disk as `nsys' does.
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Interoperability with threading, `fork' and similar}
+    Finally, last requirement - being (easily?) manageable \hyperlink{fork_handling}{in `fork()'ing applications} - is fulfilled by functionality contained in `cxxet/sink\_diversion.hxx'\footnote{https://github.com/Ruzovej/cxxet/blob/main/include/public/cxxet/sink\_diversion.hxx}. Unfortunately, this functionality must be manually guarded by the `\#ifdef CXXET\_ENABLE', as in the simplified snippet from one example\footnote{https://github.com/Ruzovej/cxxet/tree/main/examples/usage/sink\_diversion} on next slide:
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Interoperability with threading, `fork' and similar - example snippet}
+    \begin{lstlisting}[language=C++]
+#ifdef CXXET_ENABLE
+#include "cxxet/sink_diversion.hxx"
+#endif
+int main(int argc, char const **argv) {
+#ifdef CXXET_ENABLE
+  auto file_sink_local{cxxet::file_sink_handle::make(false)}; // `false' - not thread safe
+  file_sink_local->flush(cxxet::output::format::chrome_trace, filename_custom, true);
+#endif
+  std::thread t1{[&]() {
+#ifdef CXXET_ENABLE
+    file_sink_local->divert_thread_sink_to_this();
+#endif
+    // ... `CXXET_sink_thread_reserve();' and regular code ...
+  };
+    \end{lstlisting}
+
+\end{frame}
+
+\begin{frame}{cxxet features}{Interoperability with threading, `fork' and similar - further explanation}
+    In the example above, if the main thread initialized `cxxet' structures as usual (without diverting its "sink"), the application would have generated at least those 2 different trace files, independent of each other.
+
+    This is true even if both "branches" called same function (e.g. `pyramid' :-) ) that contains any markers - they would be collected in the proper `thread\_local' buffer, which would get flushed to its parent sink:
+
+    \begin{itemize}
+        \item main thread -> default, "global" sink,
+        \item thread `t1' -> `file\_sink\_local' sink.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Interoperability with threading, `fork' and similar - example snippet}
+    Even though the example demonstrates data diversion only from different threads to their corresponding files, similar principles apply to processes after successful `fork()', with exception that currently unflushed data in child process's "global" sink should be discarded, for example as such:
+
+    \begin{lstlisting}[language=C++]
+// ...
+if (fork() == 0) { // child process
+  CXXET_sink_global_flush(cxxet::output::format::chrome_trace, nullptr, false); // `false' - don't defer the flush
+  // same applies to "locally owned" sinks ...
+  // take care - previous target file was overwritten in this process!
+}
+// ...
+    \end{lstlisting}
+
+\end{frame}
+
+\begin{frame}[fragile]{cxxet features}{Interoperability with threading, `fork' and similar - example snippet}
+    Any such "redirection" can be later reverted if needed:
+
+    \begin{lstlisting}[language=C++]
+// ...
+file_sink_local->divert_thread_sink_to_this();
+// ...
+CXXET_sink_thread_flush(); // explicit flush is required + beware of unterminated markers in current scope!
+
+CXXET_sink_thread_reserve(); // call this for less skewed measurement explicitly
+CXXET_sink_thread_divert_to_sink_global(); // redirect `thread_local' buffer back to the global one
+// ... more code with markers
+    \end{lstlisting}
+
+\end{frame}
+
 
 
 \section{End of the talk}
