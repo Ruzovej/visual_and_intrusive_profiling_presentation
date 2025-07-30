@@ -5,6 +5,8 @@ set -e
 source "$(dirname "$0")/docker_common.bash"
 
 (
+    cd_to_root_of_this_repo
+    
     USER_ID="$(id -u)"
     GROUP_ID="$(id -g)"
     USER_NAME="$(id -un)"

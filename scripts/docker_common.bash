@@ -10,6 +10,16 @@ fi
 export IMAGE_NAME_BASE="texlive_compiler"
 export IMAGE_NAME="${IMAGE_NAME_BASE}:latest"
 
+function cd_to_root_of_this_repo() {
+    while [[ ! -d .git ]]; do
+        if [[ "${PWD}" == "/" ]]; then
+            printf 'Error: Not inside a git repository\n' >&2
+            exit 1
+        fi
+        cd ..
+    done
+}
+
 function run_in_texlive_container() {
     local USER_ID="$(id -u)"
     local GROUP_ID="$(id -g)"
@@ -33,13 +43,7 @@ function run_in_texlive_container() {
     done
 
     (
-        while [[ ! -d .git ]]; do
-            if [[ "${PWD}" == "/" ]]; then
-                printf 'Error: Not inside a git repository\n' >&2
-                exit 1
-            fi
-            cd ..
-        done
+        cd_to_root_of_this_repo
 
         set -x
         docker run \
