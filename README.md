@@ -1,6 +1,6 @@
-# Prague C++ meetup on 2025 07 29 - `Introduction to intrusive & visual profiling, focusing on constrained environments`
+# [Prague C++ meetup on 2025 07 29 - `Introduction to intrusive & visual profiling, focusing on constrained environments`](https://www.meetup.com/prague-cpp/events/310128881/)
 
-This repository contains a LaTeX Beamer presentation about intrusive and visual profiling techniques, with a focus on their application in constrained environments.
+This repository contains a LaTeX Beamer presentation about intrusive and visual profiling techniques, with a focus on their application in constrained environment(s).
 
 ## [License](LICENSE)
 
