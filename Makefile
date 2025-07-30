@@ -4,8 +4,10 @@ all: build/presentation.pdf
 build:
 	@[ -d build ] || mkdir -p build
 
-# Compile PDF (run twice for proper references and TOC)
-build/presentation.pdf: presentation.tex | build Makefile
+PICS := $(wildcard pics/**/*)
+
+# Compile PDF (run 3x for proper references and TOC)
+build/presentation.pdf: presentation.tex Makefile $(PICS) | build
 	@set -e; for i in 1 2 3; do \
 		pdflatex -interaction=nonstopmode -halt-on-error -output-directory=build presentation.tex; \
 	done
