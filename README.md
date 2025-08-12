@@ -5,7 +5,7 @@ This repository contains a LaTeX Beamer presentation about intrusive and visual 
 ## Links
 
 * [Meetup event](https://www.meetup.com/prague-cpp/events/310128881/)
-* [Recording of the meetup](https://youtu.be/9YEXU_FiHVk)
+* [Recording of the meetup (`youtube` link)](https://youtu.be/9YEXU_FiHVk)
   * [AI summary of the recording](AI_summary.md)
 
 Further links (e.g. to the respective libraries, tools, etc.) are mostly in the document (in footnotes) on corresponding slides.
