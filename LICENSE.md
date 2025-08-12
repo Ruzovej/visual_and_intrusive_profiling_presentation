@@ -1,0 +1,3 @@
+# CC BY 4.0
+
+© 2025 Lukáš Růžička. This work is openly licensed via [CC BY 4.0 (external link)](https://creativecommons.org/licenses/by/4.0/).
